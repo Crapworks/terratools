@@ -17,17 +17,17 @@ def load_variables(filenames):
 
     variables = {}
 
-    for varfile in filenames:
-        with open(varfile) as fh:
-            data = hcl.load(fh)
-            variables.update(data)
-
     for terrafile in glob.glob('./*.tf'):
         with open(terrafile) as fh:
             data = hcl.load(fh)
             for key, value in data.get('variable', {}).iteritems():
                 if 'default' in value:
                     variables.update({key: value['default']})
+
+    for varfile in filenames:
+        with open(varfile) as fh:
+            data = hcl.load(fh)
+            variables.update(data)
 
     return variables
 
