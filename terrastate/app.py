@@ -47,6 +47,9 @@ class TerraformState(dict):
     def _getstatefilename(self, env):
         return os.path.join(self.statepath, '%s-tfstate.json' % (env, ))
 
+    def _getlockfilename(self, env):
+        return os.path.join(self.statepath, '%s-tfstate.lock' % (env, ))
+
     def load(self):
         if not os.path.isfile(self._getstatefilename(self.env)):
             return
@@ -60,6 +63,18 @@ class TerraformState(dict):
     def destroy(self):
         if os.path.isfile(self._getstatefilename(self.env)):
             os.unlink(self._getstatefilename(self.env))
+
+    def lock(self):
+        if os.path.isfile(self._getlockfilename(self.env)):
+            raise Exception('Already locked')
+        with open(self._getlockfilename(self.env), 'w') as fh:
+            fh.write('locked')
+
+    def unlock(self):
+        if os.path.isfile(self._getlockfilename(self.env)):
+            os.unlink(self._getlockfilename(self.env))
+        else:
+            raise Exception('Not locked')
 
 
 class Config(dict):
@@ -97,6 +112,18 @@ class StateView(MethodView):
         self.state.destroy()
         return jsonify(self.state)
 
+    def lock(self, env):
+        self.state.env = env
+        self.state.lock()
+        self.state.load()
+        return jsonify(self.state)
+
+    def unlock(self, env):
+        self.state.env = env
+        self.state.unlock()
+        self.state.load()
+        return jsonify(self.state)
+
 
 class TerraStateApi(Flask):
     def __init__(self, name):
@@ -104,7 +131,7 @@ class TerraStateApi(Flask):
 
         dhc_view = StateView.as_view('status')
         self.add_url_rule('/', defaults={'env': None}, view_func=dhc_view)
-        self.add_url_rule('/<env>', view_func=dhc_view)
+        self.add_url_rule('/<env>', view_func=dhc_view, methods=['GET', 'POST', 'DELETE', 'LOCK', 'UNLOCK'])
 
         # add custom error handler
         for code in default_exceptions.iterkeys():
